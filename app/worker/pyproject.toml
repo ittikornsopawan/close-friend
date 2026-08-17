@@ -1,0 +1,26 @@
+[project]
+name = "close-friend-worker"
+version = "0.1.0"
+description = "Close Friend background job worker"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "celery[redis]>=5.4",
+    "redis>=5.0",
+    "ollama>=0.4",
+    "close-friend-shared",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "fakeredis>=2.24",
+    "ruff>=0.7",
+]
+
+[tool.uv.sources]
+close-friend-shared = { workspace = true }
+
+[build-system]
+requires = ["uv_build>=0.12.5,<0.13.0"]
+build-backend = "uv_build"

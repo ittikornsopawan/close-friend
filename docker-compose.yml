@@ -1,0 +1,74 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: close_friend
+      POSTGRES_PASSWORD: close_friend
+      POSTGRES_DB: close_friend
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    # GPU passthrough (if available) — uncomment on a host with an NVIDIA GPU + nvidia-container-toolkit:
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
+
+  api:
+    build:
+      context: .
+      dockerfile: app/api/Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      CF_API_DATABASE_URL: postgresql+psycopg://close_friend:close_friend@postgres:5432/close_friend
+      CF_API_REDIS_URL: redis://redis:6379/0
+    depends_on:
+      - postgres
+      - redis
+    # api never talks to ollama directly — it only enqueues onto redis; see docker-compose `worker`.
+
+  worker:
+    build:
+      context: .
+      dockerfile: app/worker/Dockerfile
+    environment:
+      CF_WORKER_REDIS_URL: redis://redis:6379/0
+      CF_WORKER_OLLAMA_BASE_URL: http://ollama:11434
+    depends_on:
+      - redis
+      - ollama
+    # scale consumers with: docker compose up -d --scale worker=N
+
+  web:
+    build:
+      context: .
+      dockerfile: app/web/Dockerfile
+      args:
+        # Baked into the client bundle at build time — the browser (on the
+        # host) reaches `api` via its published port, not the container name.
+        NEXT_PUBLIC_API_URL: http://localhost:8000
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
+
+volumes:
+  postgres_data:
+  ollama_data:

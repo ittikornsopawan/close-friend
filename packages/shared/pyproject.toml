@@ -1,0 +1,11 @@
+[project]
+name = "close-friend-shared"
+version = "0.1.0"
+description = "Shared Pydantic schemas and domain models used by app/api and app/worker"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = ["pydantic>=2.9"]
+
+[build-system]
+requires = ["uv_build>=0.12.5,<0.13.0"]
+build-backend = "uv_build"

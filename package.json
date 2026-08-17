@@ -1,0 +1,7 @@
+{
+  "name": "close-friend",
+  "private": true,
+  "workspaces": [
+    "app/web"
+  ]
+}
