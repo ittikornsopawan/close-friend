@@ -21,6 +21,12 @@ services:
       - "11434:11434"
     volumes:
       - ollama_data:/root/.ollama
+    healthcheck:
+      test: ["CMD-SHELL", "ollama list || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
     # GPU passthrough (if available) — uncomment on a host with an NVIDIA GPU + nvidia-container-toolkit:
     # deploy:
     #   resources:
@@ -29,6 +35,24 @@ services:
     #         - driver: nvidia
     #           count: all
     #           capabilities: [gpu]
+
+  # One-shot: pulls the default chat model into the `ollama` service's volume
+  # on first `docker compose up` (and again any time ollama_data is wiped,
+  # e.g. `docker compose down -v`) so worker never hits a missing-model
+  # error. OLLAMA_HOST points the bundled `ollama` CLI at the `ollama`
+  # service instead of starting its own local server — this container just
+  # runs the pull and exits.
+  ollama-pull:
+    image: ollama/ollama:latest
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+    # Image entrypoint is already `/bin/ollama` — override just the command
+    # (default CMD is `serve`), not the entrypoint, or the default CMD gets
+    # appended as a stray extra arg to `ollama pull ...`.
+    command: ["pull", "qwen2.5:7b-instruct-q4_K_M"]
+    depends_on:
+      ollama:
+        condition: service_healthy
 
   api:
     build:
@@ -52,8 +76,10 @@ services:
       CF_WORKER_REDIS_URL: redis://redis:6379/0
       CF_WORKER_OLLAMA_BASE_URL: http://ollama:11434
     depends_on:
-      - redis
-      - ollama
+      redis:
+        condition: service_started
+      ollama-pull:
+        condition: service_completed_successfully
     # scale consumers with: docker compose up -d --scale worker=N
 
   web:

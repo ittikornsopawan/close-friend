@@ -157,7 +157,13 @@ Every task follows this sequence:
 1. Create a new branch off `main` before starting work — never commit directly to `main`.
 2. Do the work.
 3. Before reporting the task as done, have a sub agent (via the Agent tool) review the work.
-4. Only after the review is done and the result has been reported to the user, push the branch to the remote (still subject to normal confirmation before pushing).
+4. Only after the review is done and the result has been reported to the user, push the branch to the remote (still subject to normal confirmation before pushing):
+
+```bash
+gh auth status               # confirm gh is authenticated (repo scope) — pushes go over gh's credential helper, no separate SSH/token setup
+git push -u origin <branch>  # first push of a new branch; subsequent pushes on the same branch are just `git push`
+gh pr create                 # optional — open a PR against main once the branch is pushed
+```
 
 ## Conventions
 
