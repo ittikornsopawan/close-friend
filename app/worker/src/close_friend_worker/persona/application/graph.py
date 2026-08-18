@@ -92,7 +92,7 @@ def run_persona_graph(
     result = persona_graph.invoke(initial_state)
 
     assessment = result["assessment"]
-    updated_state = repo.apply_assessment(persona_state, assessment)
+    updated_state = repo.apply_assessment(persona, persona_state, assessment)
     repo.persist_state(session, updated_state)
     repo.record_episodic_event(
         session,

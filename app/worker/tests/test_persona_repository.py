@@ -1,6 +1,10 @@
 import pytest
 from close_friend_shared.db.models import Base, EpisodicEvent, Persona
-from close_friend_worker.persona.domain.state import AssessmentResult, PersonaStateRecord
+from close_friend_worker.persona.domain.state import (
+    AssessmentResult,
+    PersonaRecord,
+    PersonaStateRecord,
+)
 from close_friend_worker.persona.infrastructure import persona_repository as repo
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
@@ -80,6 +84,7 @@ def test_get_or_init_state_returns_existing_row(db_session, seeded_persona):
     persona = repo.get_persona(db_session, "nova")
     initial = repo.get_or_init_state(db_session, "conv-1", persona)
     updated = repo.apply_assessment(
+        persona,
         initial,
         AssessmentResult(
             context_summary="chatted",
@@ -100,6 +105,24 @@ def test_get_or_init_state_returns_existing_row(db_session, seeded_persona):
     assert reloaded.rapport_score == 2.0
 
 
+def _persona_record(**overrides) -> PersonaRecord:
+    defaults = dict(
+        id="p",
+        name="Test",
+        character={},
+        boundaries=[],
+        emotion_rules=[],
+        relationship_stages=[
+            {"stage": "stranger", "min_rapport": 0, "tone": ""},
+            {"stage": "familiar", "min_rapport": 15, "tone": ""},
+            {"stage": "close", "min_rapport": 40, "tone": ""},
+        ],
+        baseline_state={"relationship_stage": "stranger"},
+    )
+    defaults.update(overrides)
+    return PersonaRecord.model_validate(defaults)
+
+
 def test_apply_assessment_clamps_intensity():
     state = PersonaStateRecord(
         conversation_id="c",
@@ -117,9 +140,39 @@ def test_apply_assessment_clamps_intensity():
         response_plan="respond",
     )
 
-    updated = repo.apply_assessment(state, assessment)
+    updated = repo.apply_assessment(_persona_record(), state, assessment)
 
     assert updated.emotion_intensity == 1.0
+
+
+def test_apply_assessment_derives_relationship_stage_from_rapport_thresholds():
+    """relationship_stage must come from personas.relationship_stages'
+    min_rapport thresholds, not be trusted verbatim from the LLM — a
+    regression test for a bug where the LLM's raw guess was persisted as-is
+    even when it contradicted the numeric rapport score."""
+    state = PersonaStateRecord(
+        conversation_id="c",
+        persona_id="p",
+        emotion="neutral",
+        emotion_intensity=0.2,
+        relationship_stage="stranger",
+        rapport_score=10,
+    )
+    # LLM claims "close" even though rapport (10 + 5 = 15) only qualifies for
+    # "familiar" per the thresholds above — the derived stage must win.
+    assessment = AssessmentResult(
+        context_summary="",
+        persona_emotion="warm",
+        emotion_intensity=0.4,
+        relationship_stage="close",
+        rapport_delta=5.0,
+        response_plan="respond",
+    )
+
+    updated = repo.apply_assessment(_persona_record(), state, assessment)
+
+    assert updated.rapport_score == 15
+    assert updated.relationship_stage == "familiar"
 
 
 def test_record_episodic_event_only_when_significant(db_session, seeded_persona):

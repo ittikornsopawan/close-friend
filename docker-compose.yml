@@ -9,6 +9,12 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U close_friend -d close_friend"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 5s
 
   redis:
     image: redis:7-alpine
@@ -66,7 +72,7 @@ services:
       CF_API_DATABASE_URL: postgresql+psycopg://close_friend:close_friend@postgres:5432/close_friend
     depends_on:
       postgres:
-        condition: service_started
+        condition: service_healthy
 
   api:
     build:
