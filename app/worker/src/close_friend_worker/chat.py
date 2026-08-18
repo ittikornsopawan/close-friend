@@ -1,15 +1,13 @@
 import logging
 
-import ollama
 from close_friend_shared import ChatMessage, MessageStatus, conversation_messages_key
 
-from close_friend_worker.config import CHAT_MODEL, OLLAMA_BASE_URL
+from close_friend_worker.db import SessionLocal
+from close_friend_worker.persona.application.graph import run_persona_graph
 from close_friend_worker.redis_client import redis_client
 
 logger = logging.getLogger(__name__)
 
-SYSTEM_PROMPT = "You are a helpful, friendly assistant."
-OLLAMA_TIMEOUT_SECONDS = 120
 FAILURE_MESSAGE = "Sorry, I couldn't generate a reply right now."
 
 
@@ -30,10 +28,11 @@ def find_message_index(messages: list[ChatMessage], message_id: str) -> int:
 
 
 def build_ollama_history(messages: list[ChatMessage], assistant_message_id: str) -> list[dict]:
-    """Turn stored ChatMessages into Ollama's `messages=[{role, content}]` shape,
-    prefixed with a generic system prompt. Excludes the still-empty placeholder
-    being filled in and any other non-complete message."""
-    history = [{"role": "system", "content": SYSTEM_PROMPT}]
+    """Turn stored ChatMessages into Ollama's `messages=[{role, content}]` shape.
+    Excludes the still-empty placeholder being filled in and any non-complete
+    message. The persona system prepends its own persona-specific system
+    prompt on top of this — see persona/infrastructure/llm.py."""
+    history = []
     for message in messages:
         if message.id == assistant_message_id or message.status != MessageStatus.COMPLETE:
             continue
@@ -41,10 +40,20 @@ def build_ollama_history(messages: list[ChatMessage], assistant_message_id: str)
     return history
 
 
-def call_ollama(history: list[dict]) -> str:
-    client = ollama.Client(host=OLLAMA_BASE_URL, timeout=OLLAMA_TIMEOUT_SECONDS)
-    response = client.chat(model=CHAT_MODEL, messages=history)
-    return response["message"]["content"]
+def generate_persona_reply(
+    conversation_id: str, assistant_message_id: str, history: list[dict]
+) -> str:
+    with SessionLocal.begin() as session:
+        return run_persona_graph(
+            session=session,
+            conversation_id=conversation_id,
+            # conversation_id doubles as persona_id today (same 1:1 pattern
+            # as the pre-persona hardcoded contacts) — see the note on
+            # persona_states.persona_id in packages/shared/db/models.py.
+            persona_id=conversation_id,
+            assistant_message_id=assistant_message_id,
+            history=history,
+        )
 
 
 def _mark_failed(conversation_id: str, assistant_message_id: str) -> None:
@@ -68,16 +77,16 @@ def _mark_failed(conversation_id: str, assistant_message_id: str) -> None:
 
 
 def respond_to_message(conversation_id: str, assistant_message_id: str) -> None:
-    # Everything from the initial Redis read through the Ollama call is
-    # wrapped here — not just call_ollama — so a Redis hiccup or a missing
-    # placeholder also resolves to `failed` instead of leaving the message
-    # `pending` forever.
+    # Everything from the initial Redis read through the persona graph is
+    # wrapped here — not just the LLM calls — so a Redis or Postgres hiccup
+    # or a missing placeholder also resolves to `failed` instead of leaving
+    # the message `pending` forever.
     try:
         messages = load_messages(conversation_id)
         index = find_message_index(messages, assistant_message_id)
         placeholder = messages[index]
         history = build_ollama_history(messages, assistant_message_id)
-        reply = call_ollama(history)
+        reply = generate_persona_reply(conversation_id, assistant_message_id, history)
     except Exception:
         logger.exception(
             "Failed to generate reply for conversation %s, message %s",

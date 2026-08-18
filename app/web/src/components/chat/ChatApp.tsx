@@ -2,19 +2,41 @@
 
 import { useState } from "react";
 
-import { CONTACTS } from "@/lib/contacts";
+import { usePersonas } from "@/hooks/usePersonas";
 
 import { ChatWindow } from "./ChatWindow";
 import { Sidebar } from "./Sidebar";
 
 export function ChatApp() {
-  const [activeContactId, setActiveContactId] = useState(CONTACTS[0].id);
-  const activeContact = CONTACTS.find((contact) => contact.id === activeContactId) ?? CONTACTS[0];
+  const { personas, isLoading, error } = usePersonas();
+  const [activePersonaId, setActivePersonaId] = useState<string | null>(null);
+
+  if (isLoading) {
+    return (
+      <div className="flex h-full w-full items-center justify-center text-sm text-zinc-400">
+        Loading personas…
+      </div>
+    );
+  }
+
+  if (error || personas.length === 0) {
+    return (
+      <div className="flex h-full w-full items-center justify-center text-sm text-zinc-400">
+        {error ?? "No personas available."}
+      </div>
+    );
+  }
+
+  const activePersona = personas.find((persona) => persona.id === activePersonaId) ?? personas[0];
 
   return (
     <div className="flex h-full w-full overflow-hidden">
-      <Sidebar activeContactId={activeContactId} onSelectContact={setActiveContactId} />
-      <ChatWindow contact={activeContact} />
+      <Sidebar
+        personas={personas}
+        activePersonaId={activePersona.id}
+        onSelectPersona={setActivePersonaId}
+      />
+      <ChatWindow persona={activePersona} />
     </div>
   );
 }

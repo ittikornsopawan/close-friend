@@ -6,7 +6,10 @@ import { getMessages, postMessage } from "@/lib/api-client";
 import type { ChatMessage } from "@/lib/types";
 
 const POLL_INTERVAL_MS = 1000;
-const MAX_POLL_ATTEMPTS = 60;
+// The persona graph makes 2 sequential LLM calls (assess + respond), each
+// with its own 120s budget worst-case — up to ~4 minutes total. 150 * 1s
+// covers that with room to spare (was 60, sized for the old single-call MVP).
+const MAX_POLL_ATTEMPTS = 150;
 
 function wait(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));

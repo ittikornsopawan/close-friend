@@ -54,6 +54,20 @@ services:
       ollama:
         condition: service_healthy
 
+  # One-shot: applies Alembic migrations then seeds the persona table.
+  # Mirrors the ollama-pull pattern above — api/worker gate on this
+  # completing successfully so neither ever queries a schema that isn't
+  # there yet or a persona table with no rows.
+  migrate:
+    build:
+      context: .
+      dockerfile: packages/shared/Dockerfile
+    environment:
+      CF_API_DATABASE_URL: postgresql+psycopg://close_friend:close_friend@postgres:5432/close_friend
+    depends_on:
+      postgres:
+        condition: service_started
+
   api:
     build:
       context: .
@@ -64,8 +78,10 @@ services:
       CF_API_DATABASE_URL: postgresql+psycopg://close_friend:close_friend@postgres:5432/close_friend
       CF_API_REDIS_URL: redis://redis:6379/0
     depends_on:
-      - postgres
-      - redis
+      redis:
+        condition: service_started
+      migrate:
+        condition: service_completed_successfully
     # api never talks to ollama directly — it only enqueues onto redis; see docker-compose `worker`.
 
   worker:
@@ -75,10 +91,13 @@ services:
     environment:
       CF_WORKER_REDIS_URL: redis://redis:6379/0
       CF_WORKER_OLLAMA_BASE_URL: http://ollama:11434
+      CF_WORKER_DATABASE_URL: postgresql+psycopg://close_friend:close_friend@postgres:5432/close_friend
     depends_on:
       redis:
         condition: service_started
       ollama-pull:
+        condition: service_completed_successfully
+      migrate:
         condition: service_completed_successfully
     # scale consumers with: docker compose up -d --scale worker=N
 

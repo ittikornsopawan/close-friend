@@ -1,6 +1,15 @@
-import type { ChatMessage } from "@/lib/types";
+import type { ChatMessage, Persona } from "@/lib/types";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+
+export async function getPersonas(): Promise<Persona[]> {
+  const res = await fetch(`${API_URL}/personas`, { cache: "no-store" });
+  if (!res.ok) {
+    throw new Error(`Failed to load personas (${res.status})`);
+  }
+  const data: { personas: Persona[] } = await res.json();
+  return data.personas;
+}
 
 export async function getMessages(conversationId: string): Promise<ChatMessage[]> {
   const res = await fetch(`${API_URL}/conversations/${conversationId}/messages`, {

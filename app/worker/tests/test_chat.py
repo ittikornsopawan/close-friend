@@ -35,10 +35,7 @@ def test_build_ollama_history_excludes_pending_placeholder():
 
     history = chat.build_ollama_history(messages, assistant_message_id="2")
 
-    assert history == [
-        {"role": "system", "content": chat.SYSTEM_PROMPT},
-        {"role": "user", "content": "hi"},
-    ]
+    assert history == [{"role": "user", "content": "hi"}]
 
 
 def test_respond_to_message_success(fake_redis, monkeypatch):
@@ -48,7 +45,7 @@ def test_respond_to_message_success(fake_redis, monkeypatch):
         _message("1", MessageRole.USER, "hi", MessageStatus.COMPLETE),
         _message("2", MessageRole.ASSISTANT, "", MessageStatus.PENDING),
     )
-    monkeypatch.setattr(chat, "call_ollama", lambda history: "hello there")
+    monkeypatch.setattr(chat, "generate_persona_reply", lambda *args: "hello there")
 
     chat.respond_to_message("general", "2")
 
@@ -57,7 +54,7 @@ def test_respond_to_message_success(fake_redis, monkeypatch):
     assert updated[1].content == "hello there"
 
 
-def test_respond_to_message_ollama_failure_marks_message_failed(fake_redis, monkeypatch):
+def test_respond_to_message_persona_failure_marks_message_failed(fake_redis, monkeypatch):
     _seed(
         fake_redis,
         "general",
@@ -65,10 +62,10 @@ def test_respond_to_message_ollama_failure_marks_message_failed(fake_redis, monk
         _message("2", MessageRole.ASSISTANT, "", MessageStatus.PENDING),
     )
 
-    def boom(history):
+    def boom(conversation_id, assistant_message_id, history):
         raise RuntimeError("connection refused")
 
-    monkeypatch.setattr(chat, "call_ollama", boom)
+    monkeypatch.setattr(chat, "generate_persona_reply", boom)
 
     chat.respond_to_message("general", "2")
 

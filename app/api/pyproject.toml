@@ -10,6 +10,8 @@ dependencies = [
     "pydantic-settings>=2.6",
     "redis>=5.0",
     "celery[redis]>=5.4",
+    "sqlalchemy>=2.0",
+    "psycopg[binary]>=3.2",
     "close-friend-shared",
 ]
 

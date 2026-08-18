@@ -1,13 +1,13 @@
 import { Avatar } from "@/components/ui/Avatar";
-import type { Contact } from "@/lib/contacts";
+import type { Persona } from "@/lib/types";
 
 interface ContactListItemProps {
-  contact: Contact;
+  persona: Persona;
   isActive: boolean;
   onSelect: () => void;
 }
 
-export function ContactListItem({ contact, isActive, onSelect }: ContactListItemProps) {
+export function ContactListItem({ persona, isActive, onSelect }: ContactListItemProps) {
   return (
     <button
       type="button"
@@ -16,8 +16,13 @@ export function ContactListItem({ contact, isActive, onSelect }: ContactListItem
         isActive ? "bg-blue-50 dark:bg-blue-950/40" : "hover:bg-zinc-50 dark:hover:bg-zinc-900"
       }`}
     >
-      <Avatar initials={contact.initials} />
-      <span className="truncate font-medium text-zinc-900 dark:text-zinc-50">{contact.name}</span>
+      <Avatar initials={persona.avatar_initials} />
+      <div className="min-w-0">
+        <div className="truncate font-medium text-zinc-900 dark:text-zinc-50">{persona.name}</div>
+        {persona.tagline && (
+          <div className="truncate text-xs text-zinc-500 dark:text-zinc-400">{persona.tagline}</div>
+        )}
+      </div>
     </button>
   );
 }
